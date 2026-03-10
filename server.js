@@ -16,13 +16,22 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ─── DATABASE ────────────────────────────────────────────────────────────────
-mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log('✅ MongoDB connected'))
-  .catch(err => {
-    console.error('❌ MongoDB connection failed:', err.message);
-    process.exit(1);
-  });
+// ─── DATABASE (Vercel serverless safe) ───────────────────────────────────────
+let isConnected = false;
+async function connectDB() {
+  if (isConnected) return;
+  await mongoose.connect(process.env.MONGODB_URI);
+  isConnected = true;
+}
+
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (err) {
+    res.status(500).json({ error: 'Database connection failed' });
+  }
+});
 
 // ─── STREMIO ADDON ROUTES (public) ───────────────────────────────────────────
 app.use('/', addonRoutes);
@@ -58,13 +67,11 @@ app.get('/', (req, res) => {
   });
 });
 
-// ─── START ───────────────────────────────────────────────────────────────────
-app.listen(PORT, () => {
-  const baseUrl = process.env.ADDON_BASE_URL || `http://localhost:${PORT}`;
-  console.log(`\n🚀 Stremio Addon running on port ${PORT}`);
-  console.log(`📺 Manifest:    ${baseUrl}/manifest.json`);
-  console.log(`🎯 Stremio URL: stremio://${baseUrl.replace(/^https?:\/\//, '')}/manifest.json`);
-  console.log(`🖥️  Dashboard:   ${baseUrl}/dashboard`);
-});
+// ─── LOCAL DEV ONLY ──────────────────────────────────────────────────────────
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`🚀 Running on http://localhost:${PORT}`);
+  });
+}
 
 module.exports = app;
