@@ -2,7 +2,7 @@
   "version": 2,
   "functions": {
     "server.js": {
-      "runtime": "now-node@10.0.0",
+      "runtime": "now-node@1.0.0",
       "memory": 512,
       "maxDuration": 10
     }
