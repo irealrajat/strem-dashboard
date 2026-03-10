@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stremio Addon Dashboard</title>
+<style>
+  :root {
+    --bg: #0f0f13;
+    --card: #1a1a24;
+    --card2: #22222f;
+    --border: #2d2d3d;
+    --accent: #7c3aed;
+    --accent2: #5b21b6;
+    --green: #10b981;
+    --red: #ef4444;
+    --yellow: #f59e0b;
+    --blue: #3b82f6;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --input: #13131a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
+
+  /* Layout */
+  .sidebar { position: fixed; left: 0; top: 0; width: 220px; height: 100vh; background: var(--card); border-right: 1px solid var(--border); padding: 20px 0; z-index: 100; }
+  .main { margin-left: 220px; padding: 24px; min-height: 100vh; }
+
+  /* Sidebar */
+  .logo { padding: 0 20px 20px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+  .logo h2 { font-size: 18px; font-weight: 700; color: var(--accent); }
+  .logo p { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 20px; cursor: pointer; color: var(--muted); transition: all .2s; font-size: 14px; border-left: 3px solid transparent; }
+  .nav-item:hover, .nav-item.active { color: var(--text); background: var(--card2); border-left-color: var(--accent); }
+  .nav-item svg { width: 18px; height: 18px; }
+
+  /* Cards */
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+  .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+  .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+  .stat-card .num { font-size: 32px; font-weight: 700; color: var(--accent); }
+  .stat-card .lbl { font-size: 13px; color: var(--muted); margin-top: 4px; }
+
+  /* Page sections */
+  .page { display: none; }
+  .page.active { display: block; }
+  .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+  .page-header h1 { font-size: 22px; font-weight: 700; }
+
+  /* Buttons */
+  .btn { display: inline-flex; align-items: center; gap: 8px; padding: 9px 18px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; border: none; transition: all .2s; }
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-primary:hover { background: var(--accent2); }
+  .btn-success { background: var(--green); color: white; }
+  .btn-danger { background: var(--red); color: white; }
+  .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  .btn-ghost:hover { color: var(--text); border-color: var(--accent); }
+  .btn-sm { padding: 5px 10px; font-size: 12px; border-radius: 6px; }
+  .btn-icon { padding: 7px; border-radius: 8px; }
+
+  /* Forms */
+  .form-group { margin-bottom: 16px; }
+  .form-label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  .form-control { width: 100%; background: var(--input); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; color: var(--text); font-size: 14px; outline: none; transition: border .2s; }
+  .form-control:focus { border-color: var(--accent); }
+  .form-control::placeholder { color: #4a4a5e; }
+  select.form-control option { background: var(--card); }
+
+  /* Grid content list */
+  .content-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
+  .content-card { background: var(--card2); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; cursor: pointer; transition: transform .2s, border-color .2s; position: relative; }
+  .content-card:hover { transform: translateY(-3px); border-color: var(--accent); }
+  .content-card img { width: 100%; aspect-ratio: 2/3; object-fit: cover; background: #1a1a24; }
+  .content-card .info { padding: 12px; }
+  .content-card .info h4 { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .content-card .info p { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .content-card .badge-inactive { position: absolute; top: 8px; right: 8px; background: rgba(239,68,68,0.85); color: white; font-size: 10px; padding: 2px 8px; border-radius: 20px; }
+  .content-card .stream-count { position: absolute; bottom: 52px; left: 8px; background: rgba(0,0,0,0.75); color: var(--green); font-size: 11px; padding: 2px 8px; border-radius: 20px; }
+
+  /* Search bar */
+  .search-bar { display: flex; gap: 10px; margin-bottom: 20px; }
+  .search-bar .form-control { max-width: 360px; }
+
+  /* Modal */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 999; align-items: center; justify-content: center; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--card); border: 1px solid var(--border); border-radius: 16px; width: 700px; max-width: 95vw; max-height: 90vh; overflow-y: auto; padding: 28px; position: relative; }
+  .modal-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; }
+  .modal-header h2 { font-size: 20px; font-weight: 700; }
+  .modal-close { background: transparent; border: none; color: var(--muted); cursor: pointer; font-size: 20px; padding: 4px; }
+  .modal-close:hover { color: var(--text); }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+  .tab { padding: 8px 18px; font-size: 14px; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all .2s; }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* Search results */
+  .tmdb-results { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; margin-top: 16px; max-height: 360px; overflow-y: auto; }
+  .tmdb-card { background: var(--card2); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; cursor: pointer; transition: all .2s; }
+  .tmdb-card:hover { border-color: var(--accent); transform: scale(1.02); }
+  .tmdb-card.selected { border-color: var(--green); }
+  .tmdb-card img { width: 100%; aspect-ratio: 2/3; object-fit: cover; }
+  .tmdb-card p { padding: 6px 8px; font-size: 12px; color: var(--text); }
+  .tmdb-card small { padding: 0 8px 6px; font-size: 11px; color: var(--muted); display: block; }
+
+  /* Stream list */
+  .stream-item { display: flex; align-items: center; gap: 10px; background: var(--card2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; margin-bottom: 8px; }
+  .stream-item .stream-info { flex: 1; }
+  .stream-item .stream-name { font-size: 14px; font-weight: 500; }
+  .stream-item .stream-url { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 300px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; }
+  .badge-blue { background: rgba(59,130,246,0.2); color: var(--blue); }
+  .badge-green { background: rgba(16,185,129,0.2); color: var(--green); }
+  .badge-yellow { background: rgba(245,158,11,0.2); color: var(--yellow); }
+
+  /* Detail panel */
+  .detail-panel { display: flex; gap: 24px; }
+  .detail-poster { width: 160px; flex-shrink: 0; }
+  .detail-poster img { width: 100%; border-radius: 10px; }
+  .detail-info { flex: 1; }
+  .detail-info h2 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  .detail-meta { font-size: 13px; color: var(--muted); margin-bottom: 12px; }
+  .detail-desc { font-size: 13px; line-height: 1.6; color: #c4c4d4; }
+
+  /* Toast */
+  .toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+  .toast { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 12px 18px; font-size: 14px; animation: slideIn .3s ease; max-width: 320px; }
+  .toast.success { border-left: 4px solid var(--green); }
+  .toast.error { border-left: 4px solid var(--red); }
+  @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+  /* Loading */
+  .spinner { width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Responsive */
+  @media (max-width: 900px) {
+    .sidebar { width: 60px; }
+    .sidebar .nav-item span, .sidebar .logo h2, .sidebar .logo p { display: none; }
+    .main { margin-left: 60px; }
+    .stat-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 600px) {
+    .main { padding: 16px; }
+    .stat-grid { grid-template-columns: repeat(2, 1fr); }
+    .detail-panel { flex-direction: column; }
+    .detail-poster { width: 100%; max-width: 160px; }
+  }
+
+  .addon-url-box { background: var(--input); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; font-size: 13px; color: var(--accent); word-break: break-all; cursor: pointer; }
+  .addon-url-box:hover { border-color: var(--accent); }
+  .divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+  .flex { display: flex; }
+  .gap-2 { gap: 8px; }
+  .items-center { align-items: center; }
+  .justify-between { justify-content: space-between; }
+  .mt-2 { margin-top: 8px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  .text-muted { color: var(--muted); }
+  .text-sm { font-size: 13px; }
+  .empty-state { text-align: center; padding: 60px 20px; color: var(--muted); }
+  .empty-state svg { width: 48px; height: 48px; margin-bottom: 16px; opacity: 0.4; }
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+  <div class="logo">
+    <h2>🎬 Stremio</h2>
+    <p>Addon Dashboard</p>
+  </div>
+  <nav>
+    <div class="nav-item active" onclick="showPage('home')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+      <span>Home</span>
+    </div>
+    <div class="nav-item" onclick="showPage('movies')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2.18"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5"/></svg>
+      <span>Movies</span>
+    </div>
+    <div class="nav-item" onclick="showPage('series')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="15" rx="2"/><path d="M17 2l-5 5-5-5"/></svg>
+      <span>Series</span>
+    </div>
+    <div class="nav-item" onclick="showPage('settings')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      <span>Settings</span>
+    </div>
+  </nav>
+</aside>
+
+<!-- Main Content -->
+<main class="main">
+
+  <!-- HOME PAGE -->
+  <div id="page-home" class="page active">
+    <div class="page-header">
+      <h1>Dashboard</h1>
+      <button class="btn btn-primary" onclick="openAddModal('movie')">+ Add Content</button>
+    </div>
+    <div class="stat-grid">
+      <div class="stat-card"><div class="num" id="stat-movies">-</div><div class="lbl">Movies</div></div>
+      <div class="stat-card"><div class="num" id="stat-series">-</div><div class="lbl">Series</div></div>
+      <div class="stat-card"><div class="num" id="stat-total">-</div><div class="lbl">Total Content</div></div>
+      <div class="stat-card"><div class="num" id="stat-streams">-</div><div class="lbl">Total Streams</div></div>
+    </div>
+    <div class="card">
+      <h3 style="margin-bottom:16px;font-size:16px;">Addon Install URL</h3>
+      <div class="addon-url-box" id="addon-manifest-url" onclick="copyManifestUrl()">Loading...</div>
+      <div class="flex gap-2 mt-2">
+        <button class="btn btn-ghost btn-sm" onclick="copyManifestUrl()">📋 Copy URL</button>
+        <button class="btn btn-primary btn-sm" onclick="openInStremio()">▶ Install in Stremio</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MOVIES PAGE -->
+  <div id="page-movies" class="page">
+    <div class="page-header">
+      <h1>Movies</h1>
+      <button class="btn btn-primary" onclick="openAddModal('movie')">+ Add Movie</button>
+    </div>
+    <div class="search-bar">
+      <input class="form-control" id="movie-search" placeholder="Search movies..." oninput="loadContent('movie')">
+    </div>
+    <div class="content-grid" id="movies-grid"></div>
+  </div>
+
+  <!-- SERIES PAGE -->
+  <div id="page-series" class="page">
+    <div class="page-header">
+      <h1>Series</h1>
+      <button class="btn btn-primary" onclick="openAddModal('series')">+ Add Series</button>
+    </div>
+    <div class="search-bar">
+      <input class="form-control" id="series-search" placeholder="Search series..." oninput="loadContent('series')">
+    </div>
+    <div class="content-grid" id="series-grid"></div>
+  </div>
+
+  <!-- SETTINGS PAGE -->
+  <div id="page-settings" class="page">
+    <div class="page-header"><h1>Settings</h1></div>
+    <div class="card">
+      <h3 style="margin-bottom:16px;">Addon Information</h3>
+      <div id="addon-info" class="text-muted text-sm">Loading...</div>
+    </div>
+  </div>
+
+</main>
+
+<!-- ═══ ADD CONTENT MODAL ═══════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="add-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="add-modal-title">Add Content</h2>
+      <button class="modal-close" onclick="closeModal('add-modal')">✕</button>
+    </div>
+    <div class="tabs">
+      <div class="tab active" onclick="switchAddTab('tmdb')">🔍 Search TMDB</div>
+      <div class="tab" onclick="switchAddTab('manual')">✏️ Manual Entry</div>
+    </div>
+
+    <!-- TMDB Search Tab -->
+    <div id="add-tab-tmdb">
+      <div class="flex gap-2">
+        <input class="form-control" id="tmdb-search-input" placeholder="Search movie or series title..." style="flex:1">
+        <select class="form-control" id="tmdb-search-type" style="width:120px">
+          <option value="movie">Movie</option>
+          <option value="series">Series</option>
+        </select>
+        <button class="btn btn-primary" onclick="searchTmdb()">Search</button>
+      </div>
+      <div class="tmdb-results" id="tmdb-results"></div>
+      <div id="tmdb-selected-preview" style="display:none;margin-top:16px;"></div>
+      <div style="margin-top:20px;display:flex;gap:10px;justify-content:flex-end;">
+        <button class="btn btn-ghost" onclick="closeModal('add-modal')">Cancel</button>
+        <button class="btn btn-primary" id="add-tmdb-btn" onclick="addFromTmdb()" disabled>Add Content</button>
+      </div>
+    </div>
+
+    <!-- Manual Tab -->
+    <div id="add-tab-manual" style="display:none">
+      <div class="grid-2">
+        <div class="form-group">
+          <label class="form-label">Title *</label>
+          <input class="form-control" id="m-title" placeholder="Movie/Series title">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Type *</label>
+          <select class="form-control" id="m-type">
+            <option value="movie">Movie</option>
+            <option value="series">Series</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">IMDB ID</label>
+          <input class="form-control" id="m-imdb" placeholder="tt1234567">
+        </div>
+        <div class="form-group">
+          <label class="form-label">TMDB ID</label>
+          <input class="form-control" id="m-tmdb" placeholder="12345">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Year</label>
+          <input class="form-control" id="m-year" type="number" placeholder="2024">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Rating</label>
+          <input class="form-control" id="m-rating" type="number" step="0.1" placeholder="7.5">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Poster URL</label>
+        <input class="form-control" id="m-poster" placeholder="https://...">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Description</label>
+        <textarea class="form-control" id="m-desc" rows="3" placeholder="Synopsis..."></textarea>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px;">
+        <button class="btn btn-ghost" onclick="closeModal('add-modal')">Cancel</button>
+        <button class="btn btn-primary" onclick="addManual()">Add Content</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ CONTENT DETAIL MODAL ═══════════════════════════════════════════════ -->
+<div class="modal-overlay" id="detail-modal">
+  <div class="modal" style="width:800px">
+    <div class="modal-header">
+      <h2>Content Details</h2>
+      <button class="modal-close" onclick="closeModal('detail-modal')">✕</button>
+    </div>
+    <div id="detail-content"></div>
+
+    <hr class="divider">
+
+    <!-- Streams Section -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h3 style="font-size:16px;">📡 Streams</h3>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-ghost btn-sm" id="bulk-btn" onclick="toggleBulkForm()">📋 Bulk Add Episodes</button>
+        <button class="btn btn-primary btn-sm" onclick="toggleAddStream()">+ Add Stream</button>
+      </div>
+    </div>
+
+    <!-- Bulk Add Episodes Form -->
+    <div id="bulk-stream-form" style="display:none;background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px;">
+      <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">Paste episode links — <strong>ek line = ek episode</strong>. Season aur starting episode number batao, baaki auto assign ho jaayega.</p>
+      <div class="grid-3" style="margin-bottom:12px;">
+        <div class="form-group">
+          <label class="form-label">Season Number</label>
+          <input class="form-control" id="b-season" type="number" value="1" min="1">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Start Episode</label>
+          <input class="form-control" id="b-start-ep" type="number" value="1" min="1">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Quality</label>
+          <select class="form-control" id="b-quality">
+            <option value="1080p">1080p</option>
+            <option value="720p">720p</option>
+            <option value="4K">4K</option>
+            <option value="480p">480p</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Language</label>
+        <input class="form-control" id="b-lang" placeholder="Hindi, English, etc." value="Hindi">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Links (one per line)</label>
+        <textarea class="form-control" id="b-urls" rows="6" placeholder="https://example.com/ep1.mp4&#10;https://example.com/ep2.mp4&#10;https://example.com/ep3.mp4&#10;..."></textarea>
+      </div>
+
+      <!-- Preview -->
+      <div id="b-preview" style="display:none;margin-bottom:12px;">
+        <p style="font-size:12px;color:var(--muted);margin-bottom:8px;">Preview:</p>
+        <div id="b-preview-list" style="max-height:160px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;"></div>
+      </div>
+
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn btn-ghost btn-sm" onclick="toggleBulkForm()">Cancel</button>
+        <button class="btn btn-ghost btn-sm" onclick="previewBulk()">👁 Preview</button>
+        <button class="btn btn-success btn-sm" onclick="addBulkStreams()">⚡ Add All Episodes</button>
+      </div>
+    </div>
+
+    <!-- Add Stream Form -->
+    <div id="add-stream-form" style="display:none;background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px;">
+      <div class="grid-2">
+        <div class="form-group">
+          <label class="form-label">Stream Name</label>
+          <input class="form-control" id="s-name" placeholder="e.g. 1080p, 720p Hindi">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Quality</label>
+          <select class="form-control" id="s-quality">
+            <option value="">Select quality</option>
+            <option value="4K">4K</option>
+            <option value="1080p">1080p</option>
+            <option value="720p">720p</option>
+            <option value="480p">480p</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Language</label>
+          <input class="form-control" id="s-lang" placeholder="English, Hindi, etc.">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Stream Type</label>
+          <select class="form-control" id="s-type" onchange="toggleStreamType()">
+            <option value="url">Direct URL</option>
+            <option value="torrent">Torrent (InfoHash)</option>
+          </select>
+        </div>
+      </div>
+      <div id="s-url-group" class="form-group">
+        <label class="form-label">Stream URL (HTTP/HLS/DASH)</label>
+        <input class="form-control" id="s-url" placeholder="https://... or http://... or magnet:...">
+      </div>
+      <div id="s-torrent-group" style="display:none">
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label">InfoHash</label>
+            <input class="form-control" id="s-infohash" placeholder="40 character infohash">
+          </div>
+          <div class="form-group">
+            <label class="form-label">File Index</label>
+            <input class="form-control" id="s-fileidx" type="number" value="0">
+          </div>
+        </div>
+      </div>
+      <div id="s-episode-group" style="display:none">
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label">Season</label>
+            <input class="form-control" id="s-season" type="number" placeholder="1">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Episode</label>
+            <input class="form-control" id="s-episode" type="number" placeholder="1">
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn btn-ghost btn-sm" onclick="toggleAddStream()">Cancel</button>
+        <button class="btn btn-success btn-sm" onclick="addStream()">Add Stream</button>
+      </div>
+    </div>
+
+    <div id="streams-list"></div>
+
+    <hr class="divider">
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn btn-ghost btn-sm" onclick="refreshMeta()">🔄 Refresh Metadata</button>
+      <button class="btn btn-ghost btn-sm" id="toggle-btn" onclick="toggleContent()">Toggle Active</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteContent()">🗑 Delete</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toasts"></div>
+
+<script>
+let currentContent = null;
+let selectedTmdb = null;
+let currentType = 'movie';
+
+// ─── INIT ────────────────────────────────────────────────────────────────────
+async function init() {
+  await loadStats();
+  await loadContent('movie');
+  await loadContent('series');
+  loadAddonInfo();
+}
+
+async function loadStats() {
+  try {
+    const res = await fetch('/api/stats');
+    const data = await res.json();
+    document.getElementById('stat-movies').textContent = data.movies;
+    document.getElementById('stat-series').textContent = data.series;
+    document.getElementById('stat-total').textContent = data.totalContent;
+    document.getElementById('stat-streams').textContent = data.totalStreams;
+  } catch(e) {}
+}
+
+async function loadAddonInfo() {
+  try {
+    const res = await fetch('/');
+    const data = await res.json();
+    document.getElementById('addon-manifest-url').textContent = data.manifest;
+    document.getElementById('addon-info').innerHTML = `
+      <p><strong>Name:</strong> ${data.name}</p>
+      <p style="margin-top:8px"><strong>Manifest:</strong> ${data.manifest}</p>
+      <p style="margin-top:8px"><strong>Stremio Install:</strong> ${data.stremioInstall}</p>
+      <p style="margin-top:8px"><strong>Status:</strong> <span style="color:var(--green)">● Running</span></p>
+    `;
+  } catch(e) {}
+}
+
+// ─── CONTENT LOADING ─────────────────────────────────────────────────────────
+async function loadContent(type) {
+  const search = document.getElementById(`${type === 'movie' ? 'movie' : 'series'}-search`)?.value || '';
+  try {
+    const res = await fetch(`/api/content?type=${type}&search=${search}&limit=50`);
+    const data = await res.json();
+    renderGrid(data.items, type);
+  } catch(e) { toast('Failed to load content', 'error'); }
+}
+
+function renderGrid(items, type) {
+  const grid = document.getElementById(type === 'movie' ? 'movies-grid' : 'series-grid');
+  if (!items.length) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M8 12h8M12 8v8"/></svg><p>No ${type === 'movie' ? 'movies' : 'series'} added yet</p></div>`;
+    return;
+  }
+  grid.innerHTML = items.map(item => `
+    <div class="content-card" onclick="openDetail('${item._id}')">
+      <img src="${item.poster || ''}" alt="${item.title}" onerror="this.src='data:image/svg+xml,<svg xmlns=\\'http://www.w3.org/2000/svg\\'><rect width=\\'100\\' height=\\'150\\' fill=\\'%231a1a24\\'/></svg>'">
+      ${!item.isActive ? '<span class="badge-inactive">Inactive</span>' : ''}
+      <span class="stream-count">▶ ${item.streams?.length || 0}</span>
+      <div class="info">
+        <h4>${item.title}</h4>
+        <p>${item.year || ''} ${item.genres?.slice(0,1).join('') || ''}</p>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ─── DETAIL MODAL ─────────────────────────────────────────────────────────────
+async function openDetail(id) {
+  try {
+    const res = await fetch(`/api/content/${id}`);
+    currentContent = await res.json();
+    renderDetail();
+    renderStreams();
+    document.getElementById('detail-modal').classList.add('open');
+  } catch(e) { toast('Failed to load content', 'error'); }
+}
+
+function renderDetail() {
+  const c = currentContent;
+  document.getElementById('s-episode-group').style.display = c.type === 'series' ? 'block' : 'none';
+  document.getElementById('toggle-btn').textContent = c.isActive ? '🔴 Deactivate' : '🟢 Activate';
+  document.getElementById('detail-content').innerHTML = `
+    <div class="detail-panel">
+      <div class="detail-poster">
+        <img src="${c.poster || ''}" alt="${c.title}" onerror="this.src=''">
+      </div>
+      <div class="detail-info">
+        <h2>${c.title}</h2>
+        <div class="detail-meta">
+          <span class="badge ${c.type === 'movie' ? 'badge-blue' : 'badge-yellow'}">${c.type}</span>
+          ${c.year ? `<span style="margin-left:8px">${c.year}</span>` : ''}
+          ${c.rating ? `<span style="margin-left:8px">⭐ ${c.rating?.toFixed(1)}</span>` : ''}
+          ${c.runtime ? `<span style="margin-left:8px">⏱ ${c.runtime} min</span>` : ''}
+        </div>
+        ${c.genres?.length ? `<div style="margin-bottom:8px">${c.genres.map(g => `<span class="badge badge-green" style="margin-right:4px">${g}</span>`).join('')}</div>` : ''}
+        <p class="detail-desc">${c.description || 'No description.'}</p>
+        <div style="margin-top:12px;font-size:12px;color:var(--muted)">
+          ${c.imdbId ? `<span>IMDB: ${c.imdbId}</span>` : ''}
+          ${c.tmdbId ? `<span style="margin-left:12px">TMDB: ${c.tmdbId}</span>` : ''}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderStreams() {
+  const list = document.getElementById('streams-list');
+  if (!currentContent.streams?.length) {
+    list.innerHTML = `<p class="text-muted text-sm" style="text-align:center;padding:20px">No streams yet. Add one above.</p>`;
+    return;
+  }
+  list.innerHTML = currentContent.streams.map(s => `
+    <div class="stream-item">
+      <div class="stream-info">
+        <div class="stream-name">
+          ${s.url ? '🔗' : '🧲'} ${s.name || 'Stream'}
+          ${s.season ? `<span class="badge badge-yellow" style="margin-left:6px">S${s.season}E${s.episode}</span>` : ''}
+        </div>
+        <div class="stream-url">${s.url || s.infoHash || ''}</div>
+        <div style="margin-top:4px">
+          ${s.quality ? `<span class="badge badge-blue">${s.quality}</span>` : ''}
+          ${s.language ? `<span class="badge badge-green" style="margin-left:4px">${s.language}</span>` : ''}
+        </div>
+      </div>
+      <button class="btn btn-danger btn-icon btn-sm" onclick="deleteStream('${s._id}')">✕</button>
+    </div>
+  `).join('');
+}
+
+// ─── ADD STREAM ───────────────────────────────────────────────────────────────
+function toggleAddStream() {
+  const form = document.getElementById('add-stream-form');
+  form.style.display = form.style.display === 'none' ? 'block' : 'none';
+}
+
+function toggleStreamType() {
+  const type = document.getElementById('s-type').value;
+  document.getElementById('s-url-group').style.display = type === 'url' ? 'block' : 'none';
+  document.getElementById('s-torrent-group').style.display = type === 'torrent' ? 'block' : 'none';
+}
+
+async function addStream() {
+  const type = document.getElementById('s-type').value;
+  const body = {
+    name: document.getElementById('s-name').value,
+    quality: document.getElementById('s-quality').value,
+    language: document.getElementById('s-lang').value,
+    season: document.getElementById('s-season').value || null,
+    episode: document.getElementById('s-episode').value || null
+  };
+  if (type === 'url') body.url = document.getElementById('s-url').value;
+  else { body.infoHash = document.getElementById('s-infohash').value; body.fileIdx = document.getElementById('s-fileidx').value; }
+
+  try {
+    const res = await fetch(`/api/content/${currentContent._id}/streams`, {
+      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (data.success) {
+      currentContent.streams = data.streams;
+      renderStreams();
+      toggleAddStream();
+      loadStats();
+      toast('Stream added!', 'success');
+    }
+  } catch(e) { toast('Failed to add stream', 'error'); }
+}
+
+async function deleteStream(streamId) {
+  if (!confirm('Delete this stream?')) return;
+  try {
+    await fetch(`/api/content/${currentContent._id}/streams/${streamId}`, { method: 'DELETE' });
+    currentContent.streams = currentContent.streams.filter(s => s._id !== streamId);
+    renderStreams();
+    loadStats();
+    toast('Stream deleted', 'success');
+  } catch(e) { toast('Failed', 'error'); }
+}
+
+// ─── ADD CONTENT ──────────────────────────────────────────────────────────────
+function openAddModal(type) {
+  currentType = type;
+  selectedTmdb = null;
+  document.getElementById('add-modal-title').textContent = `Add ${type === 'movie' ? 'Movie' : 'Series'}`;
+  document.getElementById('tmdb-search-type').value = type;
+  document.getElementById('tmdb-results').innerHTML = '';
+  document.getElementById('tmdb-selected-preview').style.display = 'none';
+  document.getElementById('add-tmdb-btn').disabled = true;
+  document.getElementById('add-modal').classList.add('open');
+}
+
+function switchAddTab(tab) {
+  document.querySelectorAll('#add-modal .tab').forEach((t,i) => t.classList.toggle('active', (i === 0 && tab === 'tmdb') || (i === 1 && tab === 'manual')));
+  document.getElementById('add-tab-tmdb').style.display = tab === 'tmdb' ? 'block' : 'none';
+  document.getElementById('add-tab-manual').style.display = tab === 'manual' ? 'block' : 'none';
+}
+
+async function searchTmdb() {
+  const query = document.getElementById('tmdb-search-input').value.trim();
+  const type = document.getElementById('tmdb-search-type').value;
+  if (!query) return;
+  const container = document.getElementById('tmdb-results');
+  container.innerHTML = '<div class="spinner" style="margin:20px auto"></div>';
+  try {
+    const res = await fetch(`/api/tmdb/search?query=${encodeURIComponent(query)}&type=${type}`);
+    const data = await res.json();
+    container.innerHTML = data.results.length
+      ? data.results.map(r => `
+        <div class="tmdb-card" id="tc-${r.tmdbId}" onclick="selectTmdb(${JSON.stringify(r).replace(/"/g,'&quot;')})">
+          <img src="${r.poster || ''}" onerror="this.style.display='none'">
+          <p>${r.title}</p>
+          <small>${r.year || ''} ⭐${r.rating?.toFixed(1) || ''}</small>
+        </div>`).join('')
+      : '<p class="text-muted text-sm" style="padding:20px;text-align:center">No results found</p>';
+  } catch(e) { container.innerHTML = '<p class="text-muted text-sm" style="padding:20px;text-align:center">Search failed</p>'; }
+}
+
+function selectTmdb(result) {
+  selectedTmdb = result;
+  document.querySelectorAll('.tmdb-card').forEach(c => c.classList.remove('selected'));
+  document.getElementById(`tc-${result.tmdbId}`)?.classList.add('selected');
+  document.getElementById('add-tmdb-btn').disabled = false;
+  document.getElementById('tmdb-selected-preview').style.display = 'block';
+  document.getElementById('tmdb-selected-preview').innerHTML = `
+    <div style="display:flex;gap:12px;align-items:center;background:var(--card2);border-radius:8px;padding:12px">
+      <img src="${result.poster||''}" style="width:50px;border-radius:6px" onerror="this.style.display='none'">
+      <div><strong>${result.title}</strong><br><span class="text-muted text-sm">${result.year||''}</span></div>
+      <span class="badge badge-green" style="margin-left:auto">Selected ✓</span>
+    </div>`;
+}
+
+async function addFromTmdb() {
+  if (!selectedTmdb) return;
+  const type = document.getElementById('tmdb-search-type').value;
+  try {
+    const res = await fetch('/api/content', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ tmdbId: selectedTmdb.tmdbId, type })
+    });
+    const data = await res.json();
+    if (data.success || data.id) {
+      closeModal('add-modal');
+      await loadContent(type);
+      loadStats();
+      toast(`"${selectedTmdb.title}" added!`, 'success');
+    } else { toast(data.error || 'Failed', 'error'); }
+  } catch(e) { toast('Failed to add content', 'error'); }
+}
+
+async function addManual() {
+  const body = {
+    title: document.getElementById('m-title').value,
+    type: document.getElementById('m-type').value,
+    imdbId: document.getElementById('m-imdb').value,
+    tmdbId: document.getElementById('m-tmdb').value,
+    year: document.getElementById('m-year').value,
+    poster: document.getElementById('m-poster').value,
+    description: document.getElementById('m-desc').value,
+    rating: document.getElementById('m-rating').value
+  };
+  if (!body.title) return toast('Title required', 'error');
+  try {
+    const res = await fetch('/api/content', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+    const data = await res.json();
+    if (data.success || data.id) {
+      closeModal('add-modal');
+      await loadContent(body.type);
+      loadStats();
+      toast(`"${body.title}" added!`, 'success');
+    } else { toast(data.error || 'Failed', 'error'); }
+  } catch(e) { toast('Failed', 'error'); }
+}
+
+// ─── CONTENT ACTIONS ──────────────────────────────────────────────────────────
+async function deleteContent() {
+  if (!confirm(`Delete "${currentContent.title}"?`)) return;
+  try {
+    await fetch(`/api/content/${currentContent._id}`, { method: 'DELETE' });
+    closeModal('detail-modal');
+    await loadContent(currentContent.type);
+    loadStats();
+    toast('Deleted', 'success');
+  } catch(e) { toast('Failed', 'error'); }
+}
+
+async function toggleContent() {
+  try {
+    const res = await fetch(`/api/content/${currentContent._id}/toggle`, { method: 'PATCH' });
+    const data = await res.json();
+    currentContent.isActive = data.isActive;
+    document.getElementById('toggle-btn').textContent = data.isActive ? '🔴 Deactivate' : '🟢 Activate';
+    loadContent(currentContent.type);
+    toast(`Content ${data.isActive ? 'activated' : 'deactivated'}`, 'success');
+  } catch(e) { toast('Failed', 'error'); }
+}
+
+async function refreshMeta() {
+  try {
+    const res = await fetch(`/api/content/${currentContent._id}/refresh`, { method: 'POST' });
+    const data = await res.json();
+    if (data.success) { currentContent = data.content; renderDetail(); toast('Metadata refreshed!', 'success'); }
+  } catch(e) { toast('Failed to refresh', 'error'); }
+}
+
+// ─── UTILS ────────────────────────────────────────────────────────────────────
+function showPage(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById(`page-${page}`).classList.add('active');
+  event?.currentTarget?.classList.add('active');
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+  if (id === 'add-stream-form') document.getElementById('add-stream-form').style.display = 'none';
+}
+
+function copyManifestUrl() {
+  const url = document.getElementById('addon-manifest-url').textContent;
+  navigator.clipboard.writeText(url).then(() => toast('Manifest URL copied!', 'success'));
+}
+
+function openInStremio() {
+  const url = document.getElementById('addon-manifest-url').textContent;
+  const stremioUrl = url.replace(/^https?:\/\//, 'stremio://');
+  window.location.href = stremioUrl;
+}
+
+function toast(msg, type = 'success') {
+  const container = document.getElementById('toasts');
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  container.appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+// ─── BULK ADD EPISODES ────────────────────────────────────────────────────────
+function toggleBulkForm() {
+  const form = document.getElementById('bulk-stream-form');
+  const singleForm = document.getElementById('add-stream-form');
+  singleForm.style.display = 'none'; // close single form if open
+  form.style.display = form.style.display === 'none' ? 'block' : 'none';
+  if (form.style.display === 'block') {
+    document.getElementById('b-preview').style.display = 'none';
+    document.getElementById('b-urls').focus();
+  }
+}
+
+function parseBulkUrls() {
+  const raw = document.getElementById('b-urls').value.trim();
+  const season = parseInt(document.getElementById('b-season').value) || 1;
+  const startEp = parseInt(document.getElementById('b-start-ep').value) || 1;
+  const quality = document.getElementById('b-quality').value;
+  const lang = document.getElementById('b-lang').value || 'Hindi';
+
+  const urls = raw.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+  return urls.map((url, i) => {
+    const ep = startEp + i;
+    return {
+      url,
+      season,
+      episode: ep,
+      quality,
+      language: lang,
+      name: `S${String(season).padStart(2,'0')}E${String(ep).padStart(2,'0')} ${quality}`,
+      title: `S${String(season).padStart(2,'0')}E${String(ep).padStart(2,'0')} • ${quality} • ${lang}`
+    };
+  });
+}
+
+function previewBulk() {
+  const items = parseBulkUrls();
+  if (!items.length) return toast('Koi URL nahi mili!', 'error');
+
+  const previewEl = document.getElementById('b-preview');
+  const listEl = document.getElementById('b-preview-list');
+
+  listEl.innerHTML = items.map(item => `
+    <div style="display:flex;align-items:center;gap:10px;background:var(--input);border-radius:6px;padding:7px 12px;">
+      <span class="badge badge-yellow" style="flex-shrink:0;">S${String(item.season).padStart(2,'0')}E${String(item.episode).padStart(2,'0')}</span>
+      <span class="badge badge-blue" style="flex-shrink:0;">${item.quality}</span>
+      <span style="font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.url}</span>
+    </div>
+  `).join('');
+
+  previewEl.style.display = 'block';
+  toast(`${items.length} episodes ready to add`, 'success');
+}
+
+async function addBulkStreams() {
+  const items = parseBulkUrls();
+  if (!items.length) return toast('Koi URL nahi mili!', 'error');
+
+  const btn = document.querySelector('#bulk-stream-form .btn-success');
+  btn.textContent = `⏳ Adding 0/${items.length}...`;
+  btn.disabled = true;
+
+  let added = 0;
+  let failed = 0;
+
+  for (const item of items) {
+    try {
+      const res = await fetch(`/api/content/${currentContent._id}/streams`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(item)
+      });
+      const data = await res.json();
+      if (data.success) {
+        added++;
+        currentContent.streams = data.streams;
+      } else { failed++; }
+    } catch(e) { failed++; }
+    btn.textContent = `⏳ Adding ${added}/${items.length}...`;
+  }
+
+  btn.textContent = '⚡ Add All Episodes';
+  btn.disabled = false;
+
+  renderStreams();
+  loadStats();
+  toggleBulkForm();
+
+  if (failed === 0) {
+    toast(`✅ ${added} episodes added successfully!`, 'success');
+  } else {
+    toast(`${added} added, ${failed} failed`, 'error');
+  }
+
+  // Clear form
+  document.getElementById('b-urls').value = '';
+  document.getElementById('b-preview').style.display = 'none';
+}
+
+document.querySelectorAll('.modal-overlay').forEach(m => {
+  m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); });
+});
+
+init();
+</script>
+</body>
+</html>

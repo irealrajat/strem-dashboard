@@ -1,0 +1,113 @@
+name: Deploy Stremio Addon
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  # ─── Option A: Deploy to VPS via SSH ───────────────────────────────────────
+  deploy-vps:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+    # Comment this job out if using Railway/Render instead
+    if: ${{ vars.DEPLOY_TARGET == 'vps' || vars.DEPLOY_TARGET == '' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --production
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || '22' }}
+          script: |
+            # Pull latest code
+            cd ~/stremio-addon || git clone https://github.com/${{ github.repository }} ~/stremio-addon
+            cd ~/stremio-addon
+            git pull origin main
+            
+            # Install deps
+            npm ci --production
+            
+            # Write .env from secrets
+            cat > .env << 'EOF'
+            MONGODB_URI=${{ secrets.MONGODB_URI }}
+            TMDB_API_KEY=${{ secrets.TMDB_API_KEY }}
+            DASHBOARD_USER=${{ secrets.DASHBOARD_USER }}
+            DASHBOARD_PASS=${{ secrets.DASHBOARD_PASS }}
+            ADDON_BASE_URL=${{ secrets.ADDON_BASE_URL }}
+            ADDON_NAME=${{ secrets.ADDON_NAME || 'My Stremio Addon' }}
+            PORT=3000
+            EOF
+            
+            # Restart with PM2
+            pm2 stop stremio-addon || true
+            pm2 start server.js --name stremio-addon
+            pm2 save
+
+  # ─── Option B: Deploy to Railway ────────────────────────────────────────────
+  deploy-railway:
+    name: Deploy to Railway
+    runs-on: ubuntu-latest
+    if: ${{ vars.DEPLOY_TARGET == 'railway' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm i -g @railway/cli
+
+      - name: Deploy to Railway
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: railway up --service stremio-addon
+
+  # ─── Option C: Deploy to Render (via API trigger) ────────────────────────────
+  deploy-render:
+    name: Deploy to Render
+    runs-on: ubuntu-latest
+    if: ${{ vars.DEPLOY_TARGET == 'render' }}
+
+    steps:
+      - name: Trigger Render Deploy
+        run: |
+          curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}"
+
+  # ─── Build check (runs on all PRs) ───────────────────────────────────────────
+  lint-check:
+    name: Lint & Build Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install all dependencies
+        run: npm install
+
+      - name: Check syntax
+        run: node --check server.js routes/addon.js routes/dashboard.js models/Content.js services/tmdb.js
+        
+      - name: Verify package structure
+        run: |
+          echo "✅ Files present:"
+          ls -la server.js routes/ models/ services/ public/
